@@ -1,0 +1,159 @@
+#include "../stencil-2d-util.h"
+
+#include "../cuda-util.h"
+
+
+__global__ void stencil2D(const double *__restrict__ u, double *__restrict__ uNew,
+                          size_t globalInnerBeginX, size_t globalInnerEndX,
+                          size_t globalInnerBeginY, size_t globalInnerEndY,
+                          size_t globalNumCellsX) {
+
+    const size_t tidx = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t tidy = blockIdx.y * blockDim.y + threadIdx.y;
+
+    const size_t i0 = globalInnerBeginX + tidx;
+    const size_t i1 = globalInnerBeginY + tidy;
+
+    if (i0 < globalInnerEndX && i1 < globalInnerEndY) {
+        uNew[i0 + i1 * globalNumCellsX] = u[i0 + i1 * globalNumCellsX]
+            + alpha * (
+                      u[(i0 - 1) +  i1      * globalNumCellsX]
+                +     u[(i0 + 1) +  i1      * globalNumCellsX]
+                +     u[ i0      + (i1 + 1) * globalNumCellsX]
+                +     u[ i0      + (i1 - 1) * globalNumCellsX]
+                - 4 * u[ i0      +  i1      * globalNumCellsX]);
+    }
+}
+
+
+struct Patch {
+    // patch boundaries in global coordinates excluding boundaries
+    size_t globalInnerBeginX;
+    size_t globalInnerEndX;
+    size_t globalInnerBeginY;
+    size_t globalInnerEndY;
+
+    // execution configuration
+    dim3 blockSize;
+    dim3 gridSize;
+};
+
+
+int main(int argc, char *argv[]) {
+    // determine application parameters
+    size_t globalNumCellsX, globalNumCellsY, numItWarmUp, numItTimed, printInterval;
+    parseCLA_2d(argc, argv, globalNumCellsX, globalNumCellsY, numItWarmUp, numItTimed, printInterval);
+
+    int numDevices = 0;
+    TODO: get number of devices
+
+    // initialize patches
+    int numPatches = TODO; // one patch per device
+
+    Patch *patches = new Patch[numPatches];
+
+    size_t patchHeight = ceilingDivide(globalNumCellsY - 2, numPatches);
+    for (int patchIdx = 0; patchIdx < numPatches; ++patchIdx) {
+        auto &patch = patches[patchIdx];
+
+        // no partitioning in the x-dimension
+        patch.globalInnerBeginX = 1;
+        patch.globalInnerEndX = globalNumCellsX - 1;
+
+        patch.globalInnerBeginY = 1 + patchIdx * patchHeight;
+        patch.globalInnerEndY   = std::min(     // the end is either
+            1 + (patchIdx + 1) * patchHeight,   // the beginning of the next patch, or
+            globalNumCellsY - 1);               // the end of the global domain
+
+        // execution configuration
+        auto numInnerCellsX = patch.globalInnerEndX - patch.globalInnerBeginX;
+        auto numInnerCellsY = patch.globalInnerEndY - patch.globalInnerBeginY;
+
+        patch.blockSize = dim3(16, 16);
+        patch.gridSize  = dim3(
+            ceilingDivide(numInnerCellsX, patch.blockSize.x),
+            ceilingDivide(numInnerCellsY, patch.blockSize.y));
+    }
+
+    // allocate
+    double *u;
+    checkCudaError(cudaMallocManaged(&u, globalNumCellsX * globalNumCellsY * sizeof(double)));
+    double *uNew;
+    checkCudaError(cudaMallocManaged(&uNew, globalNumCellsX * globalNumCellsY * sizeof(double)));
+
+    // init temperature fields including their boundaries
+    initTemperature(u, uNew, globalNumCellsX, globalNumCellsY);
+
+    // prefetch to GPU
+    for (int deviceIdx = 0; deviceIdx < numDevices; ++deviceIdx) {
+        checkCudaError(cudaSetDevice(deviceIdx));
+
+        const auto &patch = patches[deviceIdx];
+
+        auto startIdx = (patch.globalInnerBeginY - 1) * globalNumCellsX;
+        auto endIdx = (patch.globalInnerEndY + 1) * globalNumCellsX;
+        auto size = (endIdx - startIdx) * sizeof(double);
+
+        checkCudaError(cudaMemPrefetchAsync(u + startIdx, size, deviceIdx));
+        checkCudaError(cudaMemPrefetchAsync(uNew + startIdx, size, deviceIdx));
+    }
+
+    // define print and work
+    auto print = [&](size_t it) {
+        std::cout << "  Completed iteration " << it << std::endl;
+
+        std::string idx = std::to_string(it);
+        if (idx.size() < 6) idx = std::string(6 - idx.size(), '0') + idx;
+
+        // Note: this could be optimized - see the course 'Fundamentals of Accelerated Computing with Modern CUDA C++'
+        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsY, globalNumCellsX);
+    };
+
+    auto work = [&](size_t it) {
+        TODO: lauch kernels on all devices
+
+        TODO: synchronize all devices
+
+        std::swap(u, uNew);
+
+        if (printInterval > 0 && 0 == (it % printInterval))
+            print(it);
+    };
+
+    // warm-up
+    for (size_t i = 0; i < numItWarmUp; ++i)
+        work(i);
+
+    // measurement
+    for (int deviceIdx = 0; deviceIdx < numDevices; ++deviceIdx) {
+        checkCudaError(cudaSetDevice(deviceIdx));
+        checkCudaError(cudaDeviceSynchronize());
+    }
+    nvtxRangePushA("work");
+    auto start = std::chrono::steady_clock::now();
+
+    for (size_t i = 0; i < numItTimed; ++i)
+            work(i + numItWarmUp);    // account for warm-up iterations in the print interval computation
+
+    for (int deviceIdx = 0; deviceIdx < numDevices; ++deviceIdx) {
+        checkCudaError(cudaSetDevice(deviceIdx));
+        checkCudaError(cudaDeviceSynchronize());
+    }
+    auto end = std::chrono::steady_clock::now();
+    nvtxRangePop();
+
+    // print stats and diagnostic result
+    printStats(end - start, numItTimed, globalNumCellsX * globalNumCellsY, sizeof(double) + sizeof(double), 7);
+
+    checkCudaError(cudaMemPrefetchAsync(u, globalNumCellsX * globalNumCellsY * sizeof(double), cudaCpuDeviceId));
+    auto totalTemperature = accumulateTemperature(u, globalNumCellsX, globalNumCellsY);
+    std::cout << "  Total temperature is " << totalTemperature << std::endl;
+
+    // clean up
+    checkCudaError(cudaFree(u));
+    checkCudaError(cudaFree(uNew));
+
+    delete[] patches;
+
+    return 0;
+}
