@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
 
         gatherTemperature();
 
-        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsY, globalNumCellsX);
+        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsX, globalNumCellsY);
     };
 
     auto haloExchange = [&](int deviceIdx) {

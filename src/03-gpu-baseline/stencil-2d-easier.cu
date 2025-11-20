@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
 
         // Note: this could be optimized - see the course 'Fundamentals of Accelerated Computing with Modern CUDA C++'
         checkCudaError(cudaMemPrefetchAsync(u, globalNumCellsX * globalNumCellsY * sizeof(double), cudaCpuDeviceId));
-        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsY, globalNumCellsX);
+        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsX, globalNumCellsY);
         checkCudaError(cudaMemPrefetchAsync(u, globalNumCellsX * globalNumCellsY * sizeof(double), deviceId));
     };
 

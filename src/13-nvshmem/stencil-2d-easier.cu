@@ -142,7 +142,8 @@ int main(int argc, char *argv[]) {
 
     // define print and work
     auto print = [&](size_t it) {
-        std::cout << "  Completed iteration " << it << std::endl;
+        if (0 == pe)
+            std::cout << "  Completed iteration " << it << std::endl;
 
         std::string idx = std::to_string(it);
         if (idx.size() < 6) idx = std::string(6 - idx.size(), '0') + idx;
@@ -153,7 +154,10 @@ int main(int argc, char *argv[]) {
         for (int printPE = 0; printPE < numPEs; ++printPE) {
             nvshmem_barrier_all();
             if (pe == printPE)
-                writeTemperaturePatchNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsY, globalNumCellsX, patch.localNumCellsX, patch.localNumCellsY, numPatches, pe);
+                writeTemperaturePatchNpy("../output/temperature_" + idx + ".npy",
+                    patch.localU,
+                    globalNumCellsX, globalNumCellsY, patch.localNumCellsX, patch.localNumCellsY,
+                    numPatches, pe);
         }
     };
 

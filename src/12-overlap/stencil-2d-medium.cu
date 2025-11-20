@@ -137,7 +137,8 @@ int main(int argc, char *argv[]) {
 
     // define print and work
     auto print = [&](size_t it) {
-        std::cout << "  Completed iteration " << it << std::endl;
+        if (0 == rank)
+            std::cout << "  Completed iteration " << it << std::endl;
 
         std::string idx = std::to_string(it);
         if (idx.size() < 6) idx = std::string(6 - idx.size(), '0') + idx;
@@ -152,7 +153,7 @@ int main(int argc, char *argv[]) {
             if (rank == printRank) {        // only one rank per loop iteration is allowed to write
                 writeTemperaturePatchNpy("../output/temperature_" + idx + ".npy",
                     patch.localU,
-                    globalNumCellsY, globalNumCellsX, patch.localNumCellsX, patch.localNumCellsY,
+                    globalNumCellsX, globalNumCellsY, patch.localNumCellsX, patch.localNumCellsY,
                     numPatches, rank);
             }
         }

@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
         std::string idx = std::to_string(it);
         if (idx.size() < 6) idx = std::string(6 - idx.size(), '0') + idx;
 
-        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsY, globalNumCellsX);
+        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsX, globalNumCellsY);
     };
 
     /// work function    

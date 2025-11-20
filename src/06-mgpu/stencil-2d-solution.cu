@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
         if (idx.size() < 6) idx = std::string(6 - idx.size(), '0') + idx;
 
         // Note: this could be optimized - see the course 'Fundamentals of Accelerated Computing with Modern CUDA C++'
-        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsY, globalNumCellsX);
+        writeTemperatureNpy("../output/temperature_" + idx + ".npy", u, globalNumCellsX, globalNumCellsY);
     };
 
     auto work = [&](size_t it) {

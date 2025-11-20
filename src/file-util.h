@@ -6,8 +6,8 @@ void writeNpyHeader(const std::string &filename, size_t globalNumCellsX, size_t 
     // prep header content
     std::ostringstream header;
 
-    // f8 > double, fortran_order == False > row-major, shape = (globalNumCellsX, globalNumCellsY)
-    header << "{'descr': '<f8', 'fortran_order': False, 'shape': (" << globalNumCellsX << ", " << globalNumCellsY << "), }";
+    // f8 > double, fortran_order == False > row-major, shape = (globalNumCellsY, globalNumCellsX)
+    header << "{'descr': '<f8', 'fortran_order': False, 'shape': (" << globalNumCellsY << ", " << globalNumCellsX << "), }";
 
     // pad header to be multiple of 16 bytes
     size_t hlen = header.str().size();
@@ -59,5 +59,5 @@ void writeTemperaturePatchNpy(const std::string &filename, const double *data,
     size_t rowsToWrite = (patchIdx < numPatches - 1) ? localNumCellsY - 1 : localNumCellsY;
     rowsToWrite -= startRowSkip;
 
-    appendNpyData(filename, data + startRowSkip * globalNy, localNumCellsX, rowsToWrite);
+    appendNpyData(filename, data + startRowSkip * globalNx, localNumCellsX, rowsToWrite);
 }
